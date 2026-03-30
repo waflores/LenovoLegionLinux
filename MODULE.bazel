@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/main/metadata.schema.json
+module(name = "lenovo_legion_linux")
+
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_python", version = "1.9.0")
+
+# Hedron's Compile Commands Extractor for Bazel
+# https://github.com/hedronvision/bazel-compile-commands-extractor
+bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
+git_override(
+    module_name = "hedron_compile_commands",
+    # commit = "abb61a688167623088f8768cc9264798df6a9d10",  # Bleeding edge commit
+    commit = "7fe1eab26d2b8eeb5e1c6a2f38bddb001e3f9696",  # Commit which works in another project with Bazel v9.0.1
+    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
+    # Replace the commit hash (above) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main).
+    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.14",
+)
+use_repo(python, "python_versions")
+
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+
+pip.parse(
+    hub_name = "pypi",
+    python_version = "3.14",
+)
+
+
+use_repo(pip, "pypi")
+
+bazel_dep(name = "llvm", version = "0.6.0")
+register_toolchains("@llvm//toolchain:all")

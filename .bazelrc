@@ -1,0 +1,10 @@
+common --announce_rc
+common --show_timestamps --verbose_failures
+
+# Enable Bzlmod for every Bazel command
+common --enable_bzlmod --noenable_workspace
+
+common --noincompatible_disallow_empty_glob
+# Enable Debug Fission
+common --fission=yes
+common --compilation_mode=dbg
