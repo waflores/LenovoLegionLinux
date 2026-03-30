@@ -9,7 +9,7 @@ filegroup(
 
 make(
     name = "kernel_module",
-    data = ["@linux_kernel//:srcs"],
+    build_data = ["@linux_kernel//:srcs"],
     lib_source = ":legion-laptop-srcs",
     out_binaries = ["legion-laptop.ko"],
 )
