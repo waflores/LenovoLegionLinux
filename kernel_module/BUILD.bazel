@@ -1,0 +1,15 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "make")
+
+filegroup(
+    name = "legion-laptop-srcs",
+    srcs = [
+        "legion-laptop.c",
+    ],
+)
+
+make(
+    name = "kernel_module",
+    data = ["@linux_kernel//:srcs"],
+    lib_source = ":legion-laptop-srcs",
+    out_binaries = ["legion-laptop.ko"],
+)
