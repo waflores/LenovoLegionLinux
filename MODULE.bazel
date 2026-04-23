@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/main/metadata.schema.json
 module(name = "lenovo_legion_linux")
 
-bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
-bazel_dep(name = "rules_python", version = "1.9.0")
+bazel_dep(name = "rules_python", version = "2.0.0-rc3")
 
 # Hedron's Compile Commands Extractor for Bazel
 # https://github.com/hedronvision/bazel-compile-commands-extractor
@@ -31,15 +31,15 @@ pip.parse(
 )
 use_repo(pip, "pypi")
 
-bazel_dep(name = "llvm", version = "0.6.0")
+# bazel_dep(name = "llvm", version = "0.7.1")
 
-register_toolchains("@llvm//toolchain:all")
+# register_toolchains("@llvm//toolchain:all")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "linux_kernel",
     build_file = "//tools:linux_kernel.bazel",
-    strip_prefix = "linux-6.19",
-    urls = ["https://github.com/torvalds/linux/archive/refs/tags/v6.19.tar.gz"],
+    strip_prefix = "linux-7.0",
+    urls = ["https://github.com/torvalds/linux/archive/refs/tags/v7.0.tar.gz"],
 )
