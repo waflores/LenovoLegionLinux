@@ -210,6 +210,7 @@ struct model_config {
 	// TODO: maybe use bitfield
 	bool has_minifancurve;
 	bool has_custom_powermode;
+	bool has_extreme_powermode;
 	enum access_method access_method_powermode;
 
 	enum access_method access_method_keyboard;
@@ -955,6 +956,7 @@ static const struct model_config model_lzcn = {
 	.memoryio_size = 0x300,
 	.has_minifancurve = true,
 	.has_custom_powermode = true,
+	.has_extreme_powermode = true,
 	.access_method_powermode = ACCESS_METHOD_WMI,
 	.access_method_keyboard = ACCESS_METHOD_WMI2,
 	.access_method_fanspeed = ACCESS_METHOD_WMI3,
@@ -3535,27 +3537,31 @@ enum legion_ec_powermode {
 	LEGION_EC_POWERMODE_QUIET = 2,
 	LEGION_EC_POWERMODE_BALANCED = 0,
 	LEGION_EC_POWERMODE_PERFORMANCE = 1,
-	LEGION_EC_POWERMODE_CUSTOM = 3
+	LEGION_EC_POWERMODE_CUSTOM = 3,
+	LEGION_EC_POWERMODE_EXTREME = 7 // based on GZ44
 };
 
 enum legion_wmi_powermode {
-	LEGION_WMI_POWERMODE_QUIET = 1,
+	LEGION_WMI_POWERMODE_LOW_POWER = 1,
 	LEGION_WMI_POWERMODE_BALANCED = 2,
 	LEGION_WMI_POWERMODE_PERFORMANCE = 3,
-	LEGION_WMI_POWERMODE_CUSTOM = 255
+	LEGION_WMI_POWERMODE_CUSTOM = 255,
+	LEGION_WMI_POWERMODE_MAX_POWER = 224
 };
 
 static enum legion_wmi_powermode ec_to_wmi_powermode(int ec_mode)
 {
 	switch (ec_mode) {
 	case LEGION_EC_POWERMODE_QUIET:
-		return LEGION_WMI_POWERMODE_QUIET;
+		return LEGION_WMI_POWERMODE_LOW_POWER;
 	case LEGION_EC_POWERMODE_BALANCED:
 		return LEGION_WMI_POWERMODE_BALANCED;
 	case LEGION_EC_POWERMODE_PERFORMANCE:
 		return LEGION_WMI_POWERMODE_PERFORMANCE;
 	case LEGION_EC_POWERMODE_CUSTOM:
 		return LEGION_WMI_POWERMODE_CUSTOM;
+	case LEGION_EC_POWERMODE_EXTREME:
+		return LEGION_WMI_POWERMODE_MAX_POWER;
 	default:
 		return LEGION_WMI_POWERMODE_BALANCED;
 	}
@@ -3565,7 +3571,7 @@ static enum legion_ec_powermode
 wmi_to_ec_powermode(enum legion_wmi_powermode wmi_mode)
 {
 	switch (wmi_mode) {
-	case LEGION_WMI_POWERMODE_QUIET:
+	case LEGION_WMI_POWERMODE_LOW_POWER:
 		return LEGION_EC_POWERMODE_QUIET;
 	case LEGION_WMI_POWERMODE_BALANCED:
 		return LEGION_EC_POWERMODE_BALANCED;
@@ -3573,6 +3579,8 @@ wmi_to_ec_powermode(enum legion_wmi_powermode wmi_mode)
 		return LEGION_EC_POWERMODE_PERFORMANCE;
 	case LEGION_WMI_POWERMODE_CUSTOM:
 		return LEGION_EC_POWERMODE_CUSTOM;
+	case LEGION_WMI_POWERMODE_MAX_POWER:
+		return LEGION_EC_POWERMODE_EXTREME;
 	default:
 		return LEGION_EC_POWERMODE_BALANCED;
 	}
@@ -3587,7 +3595,11 @@ static ssize_t ec_read_powermode(struct legion_private *priv, int *powermode)
 
 static ssize_t ec_write_powermode(struct legion_private *priv, u8 value)
 {
-	if (!((value >= 0 && value <= 2) || value == 255)) {
+	if (value != LEGION_EC_POWERMODE_BALANCED &&
+    value != LEGION_EC_POWERMODE_PERFORMANCE &&
+    value != LEGION_EC_POWERMODE_QUIET &&
+    value != LEGION_EC_POWERMODE_CUSTOM &&
+    value != LEGION_EC_POWERMODE_EXTREME) {
 		pr_info("Unexpected power mode value ignored: %d\n", value);
 		return -ENOMEM;
 	}
@@ -3622,9 +3634,11 @@ static ssize_t wmi_read_powermode(int *powermode)
 
 static ssize_t wmi_write_powermode(u8 value)
 {
-	if (!((value >= LEGION_WMI_POWERMODE_QUIET &&
-	       value <= LEGION_WMI_POWERMODE_PERFORMANCE) ||
-	      value == LEGION_WMI_POWERMODE_CUSTOM)) {
+	if (value != LEGION_WMI_POWERMODE_BALANCED &&
+    value != LEGION_WMI_POWERMODE_PERFORMANCE &&
+    value != LEGION_WMI_POWERMODE_LOW_POWER &&
+    value != LEGION_WMI_POWERMODE_CUSTOM &&
+    value != LEGION_WMI_POWERMODE_MAX_POWER) {
 		pr_info("Unexpected power mode value ignored: %d\n", value);
 		return -ENOMEM;
 	}
@@ -5006,12 +5020,16 @@ static int legion_platform_profile_get(struct platform_profile_handler *pprof,
 	case LEGION_WMI_POWERMODE_PERFORMANCE:
 		*profile = PLATFORM_PROFILE_PERFORMANCE;
 		break;
-	case LEGION_WMI_POWERMODE_QUIET:
-		*profile = PLATFORM_PROFILE_QUIET;
+	case LEGION_WMI_POWERMODE_LOW_POWER:
+		*profile = PLATFORM_PROFILE_LOW_POWER;
 		break;
 	case LEGION_WMI_POWERMODE_CUSTOM:
-		*profile = PLATFORM_PROFILE_BALANCED_PERFORMANCE;
+		*profile = PLATFORM_PROFILE_CUSTOM;
 		break;
+	case LEGION_WMI_POWERMODE_MAX_POWER:
+		*profile = PLATFORM_PROFILE_MAX_POWER;
+		break;
+
 	default:
 		return -EINVAL;
 	}
@@ -5035,7 +5053,6 @@ static int legion_platform_profile_set(struct platform_profile_handler *pprof,
 	priv = container_of(pprof, struct legion_private,
 			    platform_profile_handler);
 #endif
-
 	switch (profile) {
 	case PLATFORM_PROFILE_BALANCED:
 		powermode = LEGION_WMI_POWERMODE_BALANCED;
@@ -5043,11 +5060,14 @@ static int legion_platform_profile_set(struct platform_profile_handler *pprof,
 	case PLATFORM_PROFILE_PERFORMANCE:
 		powermode = LEGION_WMI_POWERMODE_PERFORMANCE;
 		break;
-	case PLATFORM_PROFILE_QUIET:
-		powermode = LEGION_WMI_POWERMODE_QUIET;
+	case PLATFORM_PROFILE_LOW_POWER:
+		powermode = LEGION_WMI_POWERMODE_LOW_POWER;
 		break;
-	case PLATFORM_PROFILE_BALANCED_PERFORMANCE:
+	case PLATFORM_PROFILE_CUSTOM:
 		powermode = LEGION_WMI_POWERMODE_CUSTOM;
+		break;
+	case PLATFORM_PROFILE_MAX_POWER:
+		powermode = LEGION_WMI_POWERMODE_MAX_POWER;
 		break;
 	default:
 		return -EOPNOTSUPP;
@@ -5058,15 +5078,19 @@ static int legion_platform_profile_set(struct platform_profile_handler *pprof,
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 static bool conf_has_custom_powermode;
+static bool conf_has_extreme_powermode;
 static enum access_method conf_access_method_powermode;
 
 static int legion_platform_profile_probe(void *drvdata, unsigned long *choices)
 {
-	set_bit(PLATFORM_PROFILE_QUIET, choices);
+	set_bit(PLATFORM_PROFILE_LOW_POWER, choices);
 	set_bit(PLATFORM_PROFILE_BALANCED, choices);
 	set_bit(PLATFORM_PROFILE_PERFORMANCE, choices);
 	if (conf_has_custom_powermode && conf_access_method_powermode == ACCESS_METHOD_WMI) {
-		set_bit(PLATFORM_PROFILE_BALANCED_PERFORMANCE, choices);
+		set_bit(PLATFORM_PROFILE_CUSTOM, choices);
+	}
+	if (conf_has_extreme_powermode && conf_access_method_powermode == ACCESS_METHOD_WMI) {
+		set_bit(PLATFORM_PROFILE_MAX_POWER, choices);
 	}
 
 	return 0;
@@ -5093,6 +5117,7 @@ static int legion_platform_profile_init(struct legion_private *priv)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 	conf_has_custom_powermode = priv->conf->has_custom_powermode;
+	conf_has_extreme_powermode = priv->conf->has_extreme_powermode;
 	conf_access_method_powermode = priv->conf->access_method_powermode;
 #else
 	priv->platform_profile_handler.profile_get =
@@ -5100,14 +5125,19 @@ static int legion_platform_profile_init(struct legion_private *priv)
 	priv->platform_profile_handler.profile_set =
 		legion_platform_profile_set;
 
-	set_bit(PLATFORM_PROFILE_QUIET, priv->platform_profile_handler.choices);
+	set_bit(PLATFORM_PROFILE_LOW_POWER, priv->platform_profile_handler.choices);
 	set_bit(PLATFORM_PROFILE_BALANCED,
 		priv->platform_profile_handler.choices);
 	set_bit(PLATFORM_PROFILE_PERFORMANCE,
 		priv->platform_profile_handler.choices);
 	if (priv->conf->has_custom_powermode &&
 	    priv->conf->access_method_powermode == ACCESS_METHOD_WMI) {
-		set_bit(PLATFORM_PROFILE_BALANCED_PERFORMANCE,
+		set_bit(PLATFORM_PROFILE_CUSTOM,
+			priv->platform_profile_handler.choices);
+	}
+	if (priv->conf->has_extreme_powermode &&
+	    priv->conf->access_method_powermode == ACCESS_METHOD_WMI) {
+		set_bit(PLATFORM_PROFILE_MAX_POWER,
 			priv->platform_profile_handler.choices);
 	}
 #endif
@@ -6419,7 +6449,8 @@ static SIMPLE_DEV_PM_OPS(legion_pm, NULL, legion_pm_resume);
 // same as ideapad
 static const struct acpi_device_id legion_device_ids[] = {
 	// todo: change to "VPC2004", and also ACPI paths
-	{ "PNP0C09", 0 },
+	//{ "PNP0C09", 0 },
+	{ "VPC2004", 0 },
 	{ "", 0 },
 };
 MODULE_DEVICE_TABLE(acpi, legion_device_ids);
