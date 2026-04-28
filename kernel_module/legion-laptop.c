@@ -1031,11 +1031,11 @@ static const struct model_config model_nrcn = {
 // Legion Legion Pro 5i Gen 10 Intel with RTX 5070 - Model 83F3
 static const struct model_config model_q6cn = {
 	.registers = &ec_register_offsets_v0,
-	.check_embedded_controller_id = false,
+	.check_embedded_controller_id = true,
 	.embedded_controller_id =  0x5508, // it could also be: 0x8227 or 0x5508
 	.memoryio_physical_ec_start = 0xC400,
 	.memoryio_size = 0x300,
-	.has_minifancurve = false,
+	.has_minifancurve = true,
 	.has_custom_powermode = true,
 	.access_method_powermode = ACCESS_METHOD_WMI,
 	.access_method_keyboard = ACCESS_METHOD_WMI,
@@ -1043,7 +1043,7 @@ static const struct model_config model_q6cn = {
 	.access_method_temperature = ACCESS_METHOD_WMI3,
 	.access_method_fancurve = ACCESS_METHOD_WMI3,
 	.access_method_fanfullspeed = ACCESS_METHOD_WMI,
-	.acpi_check_dev = false,
+	.acpi_check_dev = true,
 	.ramio_physical_start = 0xFE0B0400,
 	.ramio_size = 0x600
 };
@@ -1447,6 +1447,7 @@ static const struct dmi_system_id optimistic_allowlist[] = {
 		// Part Number: 83F3000HUS
 		.ident = "Q6CN",
 		.matches = {
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "83F3"),
 			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
 			DMI_MATCH(DMI_BIOS_VERSION, "Q6CN"),
 		},
@@ -5135,7 +5136,6 @@ static int legion_platform_profile_init(struct legion_private *priv)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 	struct device *dev = &priv->platform_device->dev;
 #endif
-	int err;
 
 	if (!enable_platformprofile) {
 		pr_info("Skipping creating platform profile support because enable_platformprofile is false\n");
@@ -5174,6 +5174,7 @@ static int legion_platform_profile_init(struct legion_private *priv)
 	if (IS_ERR(priv->ppdev))
 		return PTR_ERR(priv->ppdev);
 #else
+	int err;
 	err = platform_profile_register(&priv->platform_profile_handler);
 	if (err)
 		return err;
@@ -5327,7 +5328,7 @@ static ssize_t fan_max_show(struct device *dev,
 static ssize_t autopoint_show(struct device *dev,
 			      struct device_attribute *devattr, char *buf)
 {
-	struct fancurve fancurve;
+	struct fancurve fancurve = {0};
 	int err;
 	int value;
 	struct legion_private *priv = dev_get_drvdata(dev);
@@ -6231,6 +6232,7 @@ static int legion_add(struct platform_device *pdev)
 	bool is_allowed = false;
 	bool do_load_by_list = false;
 	bool do_load = false;
+	pr_info("legion_add: Starting add function...\n");
 	//struct legion_private *priv = dev_get_drvdata(&pdev->dev);
 	dev_info(&pdev->dev, "legion_laptop platform driver probing\n");
 
@@ -6456,6 +6458,7 @@ static void legion_remove(struct platform_device *pdev)
 
 static int legion_resume(struct platform_device *pdev)
 {
+	pr_info("Non-CONFIG_PM_SLEEP resume\n");
 	//struct legion_private *priv = dev_get_drvdata(&pdev->dev);
 	dev_info(&pdev->dev, "Resumed in legion-laptop\n");
 
@@ -6465,6 +6468,7 @@ static int legion_resume(struct platform_device *pdev)
 #ifdef CONFIG_PM_SLEEP
 static int legion_pm_resume(struct device *dev)
 {
+	pr_info("CONFIG_PM_SLEEP resume\n");
 	//struct legion_private *priv = dev_get_drvdata(dev);
 	dev_info(dev, "Resumed PM in legion-laptop\n");
 
@@ -6476,8 +6480,8 @@ static SIMPLE_DEV_PM_OPS(legion_pm, NULL, legion_pm_resume);
 // same as ideapad
 static const struct acpi_device_id legion_device_ids[] = {
 	// todo: change to "VPC2004", and also ACPI paths
-	//{ "PNP0C09", 0 },
 	{ "VPC2004", 0 },
+	{ "PNP0C09", 0 },
 	{ "", 0 },
 };
 MODULE_DEVICE_TABLE(acpi, legion_device_ids);
@@ -6506,6 +6510,13 @@ static int __init legion_init(void)
 	if (err) {
 		pr_info("legion_laptop: platform_driver_register failed\n");
 		return err;
+	} else {
+		pr_info("Read identifying information: DMI_SYS_VENDOR: %s; DMI_PRODUCT_NAME: %s; DMI_BIOS_VERSION: %s\n",
+		dmi_get_system_info(DMI_SYS_VENDOR),
+		dmi_get_system_info(DMI_PRODUCT_NAME),
+		dmi_get_system_info(DMI_BIOS_VERSION));
+
+		pr_info("legion_laptop: module loaded now exiting init\n");
 	}
 
 	return 0;
