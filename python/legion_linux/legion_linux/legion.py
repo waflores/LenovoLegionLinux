@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_ENCODING = "utf8"
 DEFAULT_CONFIG_DIR = "/etc/legion_linux"
-LEGION_SYS_BASEPATH = '/sys/module/legion_laptop/drivers/platform:legion/PNP0C09:00'
+LEGION_SYS_BASEPATH = '/sys/module/legion_laptop/drivers/platform:legion/VPC2004:00'
 IDEAPAD_SYS_BASEPATH = '/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00'
 LBLDVC_FILE = "/sys/firmware/efi/efivars/LBLDVC-871455d1-5576-4fb8-9865-af0824463c9f"
 LBLDESP_FILE = "/sys/firmware/efi/efivars/LBLDESP-871455d0-5576-4fb8-9865-af0824463b9e"
@@ -501,14 +501,16 @@ class MaximumFanSpeedFeature(BoolFileFeature):
 
 class PlatformProfileFeature(FileFeature):
     def __init__(self):
-        super().__init__("/sys/firmware/acpi/platform_profile")
+        super().__init__(
+            LEGION_SYS_BASEPATH + "/platform-profile/platform-profile-[0-9]/profile")
         self.choices = StrFileFeature(
-            "/sys/firmware/acpi/platform_profile_choices")
+            LEGION_SYS_BASEPATH + "/platform-profile/platform-profile-[0-9]/choices")
         self.all_values = [
-            NamedValue("quiet", "Quiet Mode"),
+            NamedValue("low-power", "Low Power"),
             NamedValue("balanced", "Balanced Mode"),
             NamedValue("performance", "Performance Mode"),
-            NamedValue("balanced-performance", "Custom Mode")
+            NamedValue("custom", "Custom Mode"),
+            NamedValue("max-power", "Max Power")
         ]
 
     def get_values(self) -> List[NamedValue]:
