@@ -1029,11 +1029,11 @@ static const struct model_config model_nrcn = {
 // Legion Legion Pro 5i Gen 10 Intel with RTX 5070 - Model 83F3
 static const struct model_config model_q6cn = {
 	.registers = &ec_register_offsets_v0,
-	.check_embedded_controller_id = true,
-	.embedded_controller_id = 0x5508,
+	.check_embedded_controller_id = false,
+	.embedded_controller_id =  0x5508, // it could also be: 0x8227 or 0x5508
 	.memoryio_physical_ec_start = 0xC400,
 	.memoryio_size = 0x300,
-	.has_minifancurve = true,
+	.has_minifancurve = false,
 	.has_custom_powermode = true,
 	.access_method_powermode = ACCESS_METHOD_WMI,
 	.access_method_keyboard = ACCESS_METHOD_WMI,
@@ -1041,7 +1041,7 @@ static const struct model_config model_q6cn = {
 	.access_method_temperature = ACCESS_METHOD_WMI3,
 	.access_method_fancurve = ACCESS_METHOD_WMI3,
 	.access_method_fanfullspeed = ACCESS_METHOD_WMI,
-	.acpi_check_dev = true,
+	.acpi_check_dev = false,
 	.ramio_physical_start = 0xFE0B0400,
 	.ramio_size = 0x600
 };
@@ -1489,11 +1489,11 @@ static int exec_sbmc(acpi_handle handle, unsigned long arg)
 	return exec_simple_method(handle, "VPC0.SBMC", arg);
 }
 
-//static int eval_qcho(acpi_handle handle, unsigned long *res)
-//{
-//	// \_SB.PCI0.LPC0.EC0.QCHO
-//	return eval_int(handle, "QCHO", res);
-//}
+static int eval_qcho(acpi_handle handle, unsigned long *res)
+{
+	// \_SB.PCI0.LPC0.EC0.QCHO
+	return eval_int(handle, "QCHO", res);
+}
 
 static int eval_gbmd(acpi_handle handle, unsigned long *res)
 {
@@ -3734,20 +3734,18 @@ static int acpi_read_rapidcharge(struct acpi_device *adev, bool *state)
 	unsigned long result;
 	int err;
 
-	//also works? which one is better?
-	/*
-	 * err = eval_qcho(adev->handle, &result);
-	 * if (err)
-	 *  return err;
-	 * state = result;
-	 * return 0;
-	 */
-
-	err = eval_gbmd(adev->handle, &result);
-	if (err)
-		return err;
-
-	*state = result & 0x04;
+	/* Try QCHO method instead of GBMD for kernel 7.0 */
+	err = eval_qcho(adev->handle, &result);
+	if (err) {
+		/* Fallback to GBMD */
+		err = eval_gbmd(adev->handle, &result);
+		if (err)
+			return err;
+		*state = result & 0x04;
+	} else {
+		/* QCHO returns direct value */
+		*state = result ? true : false;
+	}
 	return 0;
 }
 
@@ -6448,7 +6446,8 @@ static SIMPLE_DEV_PM_OPS(legion_pm, NULL, legion_pm_resume);
 // same as ideapad
 static const struct acpi_device_id legion_device_ids[] = {
 	// todo: change to "VPC2004", and also ACPI paths
-	{ "PNP0C09", 0 },
+	// { "PNP0C09", 0 },
+	{ "VPC2004", 0 },
 	{ "", 0 },
 };
 MODULE_DEVICE_TABLE(acpi, legion_device_ids);

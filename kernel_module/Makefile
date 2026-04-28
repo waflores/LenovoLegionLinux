@@ -1,6 +1,15 @@
 SHELL := /bin/bash
-KERNELVERSION  ?= $(shell uname --kernel-release)
+KERNELVERSION  := $(shell uname --kernel-release)
 KSRC := /lib/modules/$(KERNELVERSION)/build
+
+#Check if running CachyOS kernel (uses clang toolchain)
+CACHYOS := $(shell echo $(KERNELVERSION) | grep -c cachyos)
+ifeq ($(CACHYOS),1)
+CC := clang
+LD := ld.lld
+AR := ar
+NM := nm
+endif
 
 #install dir for kernel drivers
 INSTALLDIR := /lib/modules/$(KERNELVERSION)/kernel/drivers/platform/x86
@@ -10,7 +19,7 @@ DKMSDIR := /usr/src/LenovoLegionLinux-1.0.0
 obj-m += legion-laptop.o
 
 all:
-	$(MAKE) -C $(KSRC) M=$(shell pwd) modules
+	$(MAKE) -C $(KSRC) M=$(shell pwd) modules CC="$(CC)" LD="$(LD)" AR="$(AR)" NM="$(NM)"
 
 moduleInContainer:
 	docker run -it --rm -v "$(shell pwd)":/kernel_module -w /kernel_module  -v /usr/src/:/usr/src/  -v /lib/modules/:/lib/modules gcc:12.2.0 bash
