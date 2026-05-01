@@ -4,3 +4,13 @@ filegroup(
     name = "srcs",
     srcs = glob(["**/*"]),
 )
+
+filegroup(
+    name = "include",
+    srcs = glob(["include/**"])
+)
+
+filegroup(
+    name = "top_of_tree",
+    srcs = [".clang-format"]
+)

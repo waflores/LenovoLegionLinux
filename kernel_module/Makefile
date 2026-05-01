@@ -17,6 +17,8 @@ MODDESTDIR := /lib/modules/$(KERNELVERSION)/kernel/drivers/platform/x86
 DKMSDIR := /usr/src/LenovoLegionLinux-1.0.0
 
 obj-m += legion-laptop.o
+# ccflags-$(CONFIG_LENOVO_WMI_GAMEZONE) += -Idrivers/platform/x86/lenovo
+ccflags-y = -g3 -I$(srctree)/drivers/platform/x86/lenovo
 
 all:
 	$(MAKE) -C $(KSRC) M=$(shell pwd) modules CC="$(CC)" LD="$(LD)" AR="$(AR)" NM="$(NM)"

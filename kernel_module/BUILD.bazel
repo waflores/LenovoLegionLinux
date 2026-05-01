@@ -7,9 +7,16 @@ filegroup(
     ],
 )
 
+# KSRC
 make(
     name = "kernel_module",
-    build_data = ["@linux_kernel//:srcs"],
+    args = ["KSRC=\"$EXT_BUILD_ROOT/$(dirname $(location @linux_kernel//:top_of_tree))\""],
+    build_data = [
+        "@linux_kernel//:include",
+        "Makefile",
+        "@linux_kernel//:srcs",
+        "@linux_kernel//:top_of_tree",
+    ],
     lib_source = ":legion-laptop-srcs",
     out_binaries = ["legion-laptop.ko"],
 )
