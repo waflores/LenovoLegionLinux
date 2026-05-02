@@ -5028,10 +5028,11 @@ static int legion_platform_profile_get(struct platform_profile_handler *pprof,
 	case LEGION_WMI_POWERMODE_CUSTOM:
 		*profile = PLATFORM_PROFILE_CUSTOM;
 		break;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	case LEGION_WMI_POWERMODE_MAX_POWER:
 		*profile = PLATFORM_PROFILE_MAX_POWER;
 		break;
-
+#endif
 	default:
 		return -EINVAL;
 	}
@@ -5068,9 +5069,11 @@ static int legion_platform_profile_set(struct platform_profile_handler *pprof,
 	case PLATFORM_PROFILE_CUSTOM:
 		powermode = LEGION_WMI_POWERMODE_CUSTOM;
 		break;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	case PLATFORM_PROFILE_MAX_POWER:
 		powermode = LEGION_WMI_POWERMODE_MAX_POWER;
 		break;
+#endif
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -5091,10 +5094,11 @@ static int legion_platform_profile_probe(void *drvdata, unsigned long *choices)
 	if (conf_has_custom_powermode && conf_access_method_powermode == ACCESS_METHOD_WMI) {
 		set_bit(PLATFORM_PROFILE_CUSTOM, choices);
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	if (conf_has_extreme_powermode && conf_access_method_powermode == ACCESS_METHOD_WMI) {
 		set_bit(PLATFORM_PROFILE_MAX_POWER, choices);
 	}
-
+#endif
 	return 0;
 }
 
