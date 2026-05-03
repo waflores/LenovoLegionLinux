@@ -52,8 +52,8 @@ def get_dmesg(only_tail=False, filter_log=True):
 
 @dataclass(order=True)
 class FanCurveEntry:
-    fan1_speed: float # fan speed in rpm
-    fan2_speed: float # fan speed in rpm
+    fan1_speed: float # fan speed in rpm or percent (see FanCurve.speed_unit)
+    fan2_speed: float # fan speed in rpm or percent (see FanCurve.speed_unit)
     cpu_lower_temp: int
     cpu_upper_temp: int
     gpu_lower_temp: int
@@ -97,6 +97,7 @@ class FanCurve(Serializable):
     name: str
     entries: List[FanCurveEntry]
     enable_minifancurve: bool = True
+    speed_unit: str = "rpm"
 
     def to_yaml(self):
         return yaml.dump(asdict(self), default_flow_style=False, sort_keys=False)
@@ -108,7 +109,8 @@ class FanCurve(Serializable):
         entries = [FanCurveEntry(**entry) for entry in data['entries']]
         enable_minifancurve = bool(
             data['enable_minifancurve']) if 'enable_minifancurve' in data else True
-        fan_curve = cls(name, entries, enable_minifancurve)
+        speed_unit = data.get('speed_unit', 'rpm')
+        fan_curve = cls(name, entries, enable_minifancurve, speed_unit)
         return fan_curve
 
 
@@ -602,6 +604,11 @@ class CPUCrossLoadingPowerLimit(IntFileFeature):
                                       "cpu_cross_loading_powerlimit"), 0, 100, 1)
 
 
+class CPUTemperatureLimit(IntFileFeature):
+    def __init__(self):
+        super().__init__(os.path.join(LEGION_SYS_BASEPATH, "cpu_temperature_limit"), 0, 100, 1)
+
+
 class GPUBoostClock(IntFileFeature):
     def __init__(self):
         super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_boost_clock"), 0, 10000, 1)
@@ -620,6 +627,16 @@ class GPUPPABPowerLimit(IntFileFeature):
 class GPUTemperatureLimit(IntFileFeature):
     def __init__(self):
         super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_temperature_limit"), 0, 120, 1)
+
+
+class GPUTotalProcessorPowerTargetOnAC(IntFileFeature):
+    def __init__(self):
+        super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_total_processor_power_target_on_ac"), 0, 100, 1)
+
+
+class GPUToCPUDynamicBoost(IntFileFeature):
+    def __init__(self):
+        super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_to_cpu_dynamic_boost"), 0, 80, 1)
 
 
 class YLogoLight(BoolFileFeature):
@@ -753,14 +770,27 @@ class FanCurveIO(Feature):
     minifancurve = "minifancurve"
     fan1_max = "fan1_max"
     fan2_max = "fan2_max"
+    fan_speed_unit_path = "fan_speed_unit"
+
+    FAN_SPEED_UNIT_PERCENT = 1
+    FAN_SPEED_UNIT_PWM = 2
+    FAN_SPEED_UNIT_RPM_HUNDRED = 3
 
     encoding = DEFAULT_ENCODING
 
     def __init__(self, expect_hwmon=True):
         super().__init__()
         self.hwmon_path = self._find_hwmon_dir()
+        self._fan_speed_unit = None
         if (not self.hwmon_path) and expect_hwmon:
             raise FileNotFoundError("hwmon dir not found")
+
+    def _get_speed_unit(self):
+        if self._fan_speed_unit is None:
+            file_path = self.hwmon_path + self.fan_speed_unit_path
+            self._fan_speed_unit = self._read_file_or(file_path,
+                                                       self.FAN_SPEED_UNIT_RPM_HUNDRED)
+        return self._fan_speed_unit
 
     def exists(self):
         if self.hwmon_path is not None:
@@ -821,10 +851,12 @@ class FanCurveIO(Feature):
         self._write_file(file_path, value)
 
     def set_fan_1_speed_rpm(self, point_id, value):
-        return self.set_fan_1_speed_pwm(point_id, round(value/self.get_fan_1_max_rpm()*255.0))
+        pwm = round(value / self.get_fan_1_max_rpm() * 255.0)
+        return self.set_fan_1_speed_pwm(point_id, pwm)
 
     def set_fan_2_speed_rpm(self, point_id, value):
-        return self.set_fan_2_speed_pwm(point_id, round(value/self.get_fan_2_max_rpm()*255.0))
+        pwm = round(value / self.get_fan_2_max_rpm() * 255.0)
+        return self.set_fan_2_speed_pwm(point_id, pwm)
 
     def set_lower_cpu_temperature(self, point_id, value):
         point_id = self._validate_point_id(point_id)
@@ -877,10 +909,28 @@ class FanCurveIO(Feature):
         return self._read_file(file_path)
 
     def get_fan_1_speed_rpm(self, point_id):
-        return round(self.get_fan_1_speed_pwm(point_id)/255.0*self.get_fan_1_max_rpm(), ndigits=2)
+        pwm = self.get_fan_1_speed_pwm(point_id)
+        return round(pwm / 255.0 * self.get_fan_1_max_rpm(), ndigits=2)
 
     def get_fan_2_speed_rpm(self, point_id):
-        return round(self.get_fan_2_speed_pwm(point_id)/255.0*self.get_fan_2_max_rpm(), ndigits=2)
+        pwm = self.get_fan_2_speed_pwm(point_id)
+        return round(pwm / 255.0 * self.get_fan_2_max_rpm(), ndigits=2)
+
+    def set_fan_1_speed_percent(self, point_id, value):
+        pwm = round(value * 255 / 100)
+        return self.set_fan_1_speed_pwm(point_id, pwm)
+
+    def set_fan_2_speed_percent(self, point_id, value):
+        pwm = round(value * 255 / 100)
+        return self.set_fan_2_speed_pwm(point_id, pwm)
+
+    def get_fan_1_speed_percent(self, point_id):
+        pwm = self.get_fan_1_speed_pwm(point_id)
+        return round(pwm * 100 / 255)
+
+    def get_fan_2_speed_percent(self, point_id):
+        pwm = self.get_fan_2_speed_pwm(point_id)
+        return round(pwm * 100 / 255)
 
     def get_lower_cpu_temperature(self, point_id):
         point_id = self._validate_point_id(point_id)
@@ -938,6 +988,13 @@ class FanCurveIO(Feature):
 
     def set_str_value(self, value: str):
         fancurve = FanCurve.from_yaml(value)
+        speed_unit = self._get_speed_unit()
+        to_unit = 'percent' if speed_unit == self.FAN_SPEED_UNIT_PERCENT else 'rpm'
+        fancurve = FanCurveRepository._convert_speed_unit(
+            fancurve,
+            to_unit,
+            self.get_fan_1_max_rpm(),
+            self.get_fan_2_max_rpm())
         self.write_fan_curve(fancurve)
 
     def write_fan_curve(self, fan_curve: FanCurve, _=False):
@@ -952,10 +1009,15 @@ class FanCurveIO(Feature):
         # pylint: disable=broad-except
         except BaseException as error:
             log.error(str(error))
+        speed_unit = self._get_speed_unit()
         for index, entry in enumerate(fan_curve.entries):
             point_id = index + 1
-            self.set_fan_1_speed_rpm(point_id, entry.fan1_speed)
-            self.set_fan_2_speed_rpm(point_id, entry.fan2_speed)
+            if speed_unit == self.FAN_SPEED_UNIT_PERCENT:
+                self.set_fan_1_speed_percent(point_id, entry.fan1_speed)
+                self.set_fan_2_speed_percent(point_id, entry.fan2_speed)
+            else:
+                self.set_fan_1_speed_rpm(point_id, entry.fan1_speed)
+                self.set_fan_2_speed_rpm(point_id, entry.fan2_speed)
             self.set_lower_cpu_temperature(point_id, entry.cpu_lower_temp)
             self.set_upper_cpu_temperature(point_id, entry.cpu_upper_temp)
             self.set_lower_gpu_temperature(point_id, entry.gpu_lower_temp)
@@ -968,9 +1030,14 @@ class FanCurveIO(Feature):
     def read_fan_curve(self) -> FanCurve:
         """Reads a fan curve object from the file system"""
         entries = []
+        speed_unit = self._get_speed_unit()
         for point_id in range(1, 11):
-            fan1_speed = self.get_fan_1_speed_rpm(point_id)
-            fan2_speed = self.get_fan_2_speed_rpm(point_id)
+            if speed_unit == self.FAN_SPEED_UNIT_PERCENT:
+                fan1_speed = self.get_fan_1_speed_percent(point_id)
+                fan2_speed = self.get_fan_2_speed_percent(point_id)
+            else:
+                fan1_speed = self.get_fan_1_speed_rpm(point_id)
+                fan2_speed = self.get_fan_2_speed_rpm(point_id)
             cpu_lower_temp = self.get_lower_cpu_temperature(point_id)
             cpu_upper_temp = self.get_upper_cpu_temperature(point_id)
             gpu_lower_temp = self.get_lower_gpu_temperature(point_id)
@@ -985,7 +1052,8 @@ class FanCurveIO(Feature):
                                   ic_lower_temp=ic_lower_temp, ic_upper_temp=ic_upper_temp,
                                   acceleration=acceleration, deceleration=deceleration)
             entries.append(entry)
-        fancurve = FanCurve(name='unknown', entries=entries)
+        speed_unit_name = 'percent' if speed_unit == self.FAN_SPEED_UNIT_PERCENT else 'rpm'
+        fancurve = FanCurve(name='unknown', entries=entries, speed_unit=speed_unit_name)
         try:
             fancurve.enable_minifancurve = self.get_minifancuve()
         # pylint: disable=broad-except
@@ -1104,6 +1172,23 @@ class FanCurveRepository(Feature):
         self.preset_dir = preset_dir
 
     @staticmethod
+    def _convert_speed_unit(fancurve: FanCurve, to_unit: str, fan1_max_rpm: int, fan2_max_rpm: int) -> FanCurve:
+        from_unit = fancurve.speed_unit or 'rpm'
+        if from_unit == to_unit:
+            return fancurve
+        if from_unit not in ['rpm', 'percent'] or to_unit not in ['rpm', 'percent']:
+            raise ValueError(f"Unsupported speed_unit conversion: {from_unit} -> {to_unit}")
+        for entry in fancurve.entries:
+            if from_unit == 'rpm' and to_unit == 'percent':
+                entry.fan1_speed = round(entry.fan1_speed / fan1_max_rpm * 100)
+                entry.fan2_speed = round(entry.fan2_speed / fan2_max_rpm * 100)
+            elif from_unit == 'percent' and to_unit == 'rpm':
+                entry.fan1_speed = round(entry.fan1_speed / 100 * fan1_max_rpm)
+                entry.fan2_speed = round(entry.fan2_speed / 100 * fan2_max_rpm)
+        fancurve.speed_unit = to_unit
+        return fancurve
+
+    @staticmethod
     def get_preset_name(profile: str, is_on_powersupply: bool):
         symb = "ac" if is_on_powersupply else "battery"
         preset_name = f"{profile}-{symb}"
@@ -1118,13 +1203,20 @@ class FanCurveRepository(Feature):
     def does_exists_by_name(self, name):
         return os.path.exists(self._name_to_filename(name))
 
-    def load_by_name(self, name):
-        return FanCurve.load_from_file(self._name_to_filename(name))
+    def load_by_name(self, name, to_speed_unit: Optional[str] = None,
+                     fan1_max_rpm: Optional[int] = None, fan2_max_rpm: Optional[int] = None):
+        fancurve = FanCurve.load_from_file(self._name_to_filename(name))
+        if to_speed_unit is not None:
+            if fan1_max_rpm is None or fan2_max_rpm is None:
+                raise ValueError("fan1_max_rpm and fan2_max_rpm are required for speed unit conversion")
+            fancurve = self._convert_speed_unit(fancurve, to_speed_unit, fan1_max_rpm, fan2_max_rpm)
+        return fancurve
 
-    def load_by_name_or_default(self, name):
+    def load_by_name_or_default(self, name, to_speed_unit: Optional[str] = None,
+                                fan1_max_rpm: Optional[int] = None, fan2_max_rpm: Optional[int] = None):
         if self.does_exists_by_name(name):
-            return self.load_by_name(name)
-        return FanCurve(name='unknown', entries=[])
+            return self.load_by_name(name, to_speed_unit, fan1_max_rpm, fan2_max_rpm)
+        return FanCurve(name='unknown', entries=[], speed_unit=to_speed_unit or 'rpm')
 
     def save_by_name(self, name, fancurve: FanCurve):
         if self.use_legion_cli_to_write:
@@ -1406,7 +1498,8 @@ class LegionModelFacade:
         self.fan_curve = FanCurve(name='unknown',
                                   entries=[FanCurveEntry(
                                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0) for i in range(10)],
-                                  enable_minifancurve=False)
+                                  enable_minifancurve=False,
+                                  speed_unit='rpm')
         self.lockfancontroller = LockFanController()
         self.rapid_charging = RapidChargingFeature(None)
         self.battery_conservation = BatteryConservation(None)
@@ -1434,12 +1527,15 @@ class LegionModelFacade:
         self.cpu_peak_power_limit = CPUPeakPowerLimit()
         self.cpu_default_power_limit = CPUDefaultPowerLimit()
         self.cpu_cross_loading_power_limit = CPUCrossLoadingPowerLimit()
+        self.cpu_temperature_limit = CPUTemperatureLimit()
         self.cpu_apu_sppt_power_limit = CPUAPUSPPTPowerLimit()
         self.gpu_overclock = GPUOverclock()
         self.gpu_boost_clock = GPUBoostClock()
         self.gpu_ctgp_power_limit = GPUCTGPPowerLimit()
         self.gpu_ppab_power_limit = GPUPPABPowerLimit()
         self.gpu_temperature_limit = GPUTemperatureLimit()
+        self.gpu_total_processor_power_target_on_ac = GPUTotalProcessorPowerTargetOnAC()
+        self.gpu_to_cpu_dynamic_boost = GPUToCPUDynamicBoost()
 
         # light
         self.ylogo_light = YLogoLight()
@@ -1599,9 +1695,16 @@ class LegionModelFacade:
         self.fancurve_io.write_fan_curve(self.fan_curve, write_minifancurve)
 
     def load_fancurve_from_preset(self, name):
-        self.fan_curve = self.fancurve_repo.load_by_name(name)
+        speed_unit = 'percent' if self.fancurve_io._get_speed_unit() == self.fancurve_io.FAN_SPEED_UNIT_PERCENT else 'rpm'
+        self.fan_curve = self.fancurve_repo.load_by_name(
+            name,
+            to_speed_unit=speed_unit,
+            fan1_max_rpm=self.fancurve_io.get_fan_1_max_rpm(),
+            fan2_max_rpm=self.fancurve_io.get_fan_2_max_rpm())
 
     def save_fancurve_to_preset(self, name):
+        speed_unit = 'percent' if self.fancurve_io._get_speed_unit() == self.fancurve_io.FAN_SPEED_UNIT_PERCENT else 'rpm'
+        self.fan_curve.speed_unit = speed_unit
         self.fancurve_repo.save_by_name(name, self.fan_curve)
 
     def fancurve_write_preset_to_hw(self, name, write_minifancurve=False):
@@ -1613,7 +1716,13 @@ class LegionModelFacade:
         self.save_fancurve_to_preset(name)
 
     def fancurve_write_file_to_hw(self, filename: str, write_minifancurve=False):
-        self.fan_curve = FanCurve.load_from_file(filename)
+        speed_unit = 'percent' if self.fancurve_io._get_speed_unit() == self.fancurve_io.FAN_SPEED_UNIT_PERCENT else 'rpm'
+        fan_curve = FanCurve.load_from_file(filename)
+        self.fan_curve = self.fancurve_repo._convert_speed_unit(
+            fan_curve,
+            speed_unit,
+            self.fancurve_io.get_fan_1_max_rpm(),
+            self.fancurve_io.get_fan_2_max_rpm())
         self.write_fancurve_to_hw(write_minifancurve)
 
     def fancurve_write_hw_to_file(self, filename: str):
@@ -1628,7 +1737,12 @@ class LegionModelFacade:
         print(
             f"Loading preset={preset_name} for profile={profile} and is_powersupply={is_on_powersupply}")
         if preset_name in self.fancurve_repo.fancurve_presets:
-            fancurve = self.fancurve_repo.load_by_name_or_default(preset_name)
+            speed_unit = 'percent' if self.fancurve_io._get_speed_unit() == self.fancurve_io.FAN_SPEED_UNIT_PERCENT else 'rpm'
+            fancurve = self.fancurve_repo.load_by_name_or_default(
+                preset_name,
+                to_speed_unit=speed_unit,
+                fan1_max_rpm=self.fancurve_io.get_fan_1_max_rpm(),
+                fan2_max_rpm=self.fancurve_io.get_fan_2_max_rpm())
             self.fancurve_io.write_fan_curve(fancurve, write_minifancurve)
             print(fancurve)
 

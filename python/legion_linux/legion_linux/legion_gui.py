@@ -570,10 +570,13 @@ class LegionController:
     cpu_shortterm_power_limit_controller: IntFeatureController
     cpu_peak_power_limit_controller: IntFeatureController
     cpu_cross_loading_power_limit_controller: IntFeatureController
+    cpu_temperature_limit_controller: IntFeatureController
     cpu_apu_sppt_power_limit_controller: IntFeatureController
     gpu_ctgp_power_limit_controller: IntFeatureController
     gpu_ppab_power_limit_controller: IntFeatureController
     gpu_temperature_limit_controller: IntFeatureController
+    gpu_total_processor_power_target_on_ac_controller: IntFeatureController
+    gpu_to_cpu_dynamic_boost_controller: IntFeatureController
     # light
     ylogo_light_controller: BoolFeatureController
     ioport_light_controller: BoolFeatureController
@@ -680,6 +683,9 @@ class LegionController:
         self.cpu_cross_loading_power_limit_controller = IntFeatureController(
             self.view_otheroptions.cpu_cross_loading_power_limit_spinbox,
             self.model.cpu_cross_loading_power_limit)
+        self.cpu_temperature_limit_controller = IntFeatureController(
+            self.view_otheroptions.cpu_temperature_limit_spinbox,
+            self.model.cpu_temperature_limit)
         self.cpu_apu_sppt_power_limit_controller = IntFeatureController(
             self.view_otheroptions.cpu_apu_sppt_power_limit_spinbox,
             self.model.cpu_apu_sppt_power_limit)
@@ -692,6 +698,12 @@ class LegionController:
         self.gpu_temperature_limit_controller = IntFeatureController(
             self.view_otheroptions.gpu_temperature_limit_spinbox,
             self.model.gpu_temperature_limit)
+        self.gpu_total_processor_power_target_on_ac_controller = IntFeatureController(
+            self.view_otheroptions.gpu_total_processor_power_target_on_ac_spinbox,
+            self.model.gpu_total_processor_power_target_on_ac)
+        self.gpu_to_cpu_dynamic_boost_controller = IntFeatureController(
+            self.view_otheroptions.gpu_to_cpu_dynamic_boost_spinbox,
+            self.model.gpu_to_cpu_dynamic_boost)
 
         # light
         self.ylogo_light_controller = BoolFeatureController(
@@ -827,6 +839,8 @@ class LegionController:
             update_bounds=update_bounds)
         self.cpu_cross_loading_power_limit_controller.update_view_from_feature(
             update_bounds=update_bounds)
+        self.cpu_temperature_limit_controller.update_view_from_feature(
+            update_bounds=update_bounds)
         self.cpu_apu_sppt_power_limit_controller.update_view_from_feature(
             update_bounds=update_bounds)
         self.gpu_ctgp_power_limit_controller.update_view_from_feature(
@@ -834,6 +848,10 @@ class LegionController:
         self.gpu_ppab_power_limit_controller.update_view_from_feature(
             update_bounds=update_bounds)
         self.gpu_temperature_limit_controller.update_view_from_feature(
+            update_bounds=update_bounds)
+        self.gpu_total_processor_power_target_on_ac_controller.update_view_from_feature(
+            update_bounds=update_bounds)
+        self.gpu_to_cpu_dynamic_boost_controller.update_view_from_feature(
             update_bounds=update_bounds)
 
     def power_gui_write_to_hw(self):
@@ -844,11 +862,14 @@ class LegionController:
         self.cpu_peak_power_limit_controller.update_feature_from_view(False)
         self.cpu_cross_loading_power_limit_controller.update_feature_from_view(
             False)
+        self.cpu_temperature_limit_controller.update_feature_from_view(False)
         self.cpu_apu_sppt_power_limit_controller.update_feature_from_view(
             False)
         self.gpu_ctgp_power_limit_controller.update_feature_from_view(False)
         self.gpu_ppab_power_limit_controller.update_feature_from_view(False)
         self.gpu_temperature_limit_controller.update_feature_from_view(False)
+        self.gpu_total_processor_power_target_on_ac_controller.update_feature_from_view(False)
+        self.gpu_to_cpu_dynamic_boost_controller.update_feature_from_view(False)
         self.update_power_gui()
 
     def update_fancurve_gui(self):
@@ -1000,12 +1021,14 @@ class FanCurveTab(QWidget):
         super().__init__()
         self.controller = controller
         self.entry_edits = []
+        self.speed_unit = 'rpm'
         self.init_ui()
 
         self.controller.view_fancurve = self
 
     def set_fancurve(self, fancurve: FanCurve, has_minifancurve: bool, enabled: bool):
         self.minfancurve_check.setDisabled(not has_minifancurve)
+        self._set_speed_labels(fancurve)
         for i, entry in enumerate(fancurve.entries):
             self.entry_edits[i].set(entry)
             self.entry_edits[i].set_disabled(not enabled)
@@ -1016,13 +1039,20 @@ class FanCurveTab(QWidget):
             self.entry_edits[i].set(entry)
         self.minfancurve_check.setChecked(fancurve.enable_minifancurve)
 
+    def _set_speed_labels(self, fancurve: FanCurve):
+        self.speed_unit = fancurve.speed_unit or 'rpm'
+        unit_label = "%" if self.speed_unit == 'percent' else "rpm"
+        self.fan_speed1_label.setText(f"Fan 1 Speed [{unit_label}]")
+        self.fan_speed2_label.setText(f"Fan 2 Speed [{unit_label}]")
+
     def get_fancurve(self) -> FanCurve:
         entries = []
         for i in range(10):
             entry = self.entry_edits[i].get()
             entries.append(entry)
         return FanCurve(name='unknown', entries=entries,
-                        enable_minifancurve=self.minfancurve_check.isChecked())
+                        enable_minifancurve=self.minfancurve_check.isChecked(),
+                        speed_unit=self.speed_unit)
 
     def create_fancurve_entry_view(self, layout, point_id):
         self.entry_edits.append(FanCurveEntryView(point_id, layout))
@@ -1279,37 +1309,61 @@ class OtherOptionsTab(QWidget):
         self.power_layout.addWidget(
             self.cpu_cross_loading_power_limit_spinbox, 6, 1)
 
+        self.cpu_temperature_limit_spinbox_label = QLabel(
+            "CPU Temperature Limit [°C]")
+        self.cpu_temperature_limit_spinbox = QSpinBox()
+        self.power_layout.addWidget(
+            self.cpu_temperature_limit_spinbox_label, 7, 0)
+        self.power_layout.addWidget(
+            self.cpu_temperature_limit_spinbox, 7, 1)
+
         self.cpu_apu_sppt_power_limit_spinbox_label = QLabel(
             "CPU APU SPPT Power Limit [W]")
         self.cpu_apu_sppt_power_limit_spinbox = QSpinBox()
         self.power_layout.addWidget(
-            self.cpu_apu_sppt_power_limit_spinbox_label, 7, 0)
+            self.cpu_apu_sppt_power_limit_spinbox_label, 8, 0)
         self.power_layout.addWidget(
-            self.cpu_apu_sppt_power_limit_spinbox, 7, 1)
+            self.cpu_apu_sppt_power_limit_spinbox, 8, 1)
 
         self.gpu_ctgp_power_limit_spinbox_label = QLabel(
             "GPU cTGP Power Limit [W]")
         self.gpu_ctgp_power_limit_spinbox = QSpinBox()
         self.power_layout.addWidget(
-            self.gpu_ctgp_power_limit_spinbox_label, 8, 0)
+            self.gpu_ctgp_power_limit_spinbox_label, 9, 0)
         self.power_layout.addWidget(
-            self.gpu_ctgp_power_limit_spinbox, 8, 1)
+            self.gpu_ctgp_power_limit_spinbox, 9, 1)
 
         self.gpu_ppab_power_limit_spinbox_label = QLabel(
             "GPU PPAB Power Limit [W]")
         self.gpu_ppab_power_limit_spinbox = QSpinBox()
         self.power_layout.addWidget(
-            self.gpu_ppab_power_limit_spinbox_label, 9, 0)
+            self.gpu_ppab_power_limit_spinbox_label, 10, 0)
         self.power_layout.addWidget(
-            self.gpu_ppab_power_limit_spinbox, 9, 1)
+            self.gpu_ppab_power_limit_spinbox, 10, 1)
 
         self.gpu_temperature_limit_spinbox_label = QLabel(
             "GPU Temperature Limit [°C]")
         self.gpu_temperature_limit_spinbox = QSpinBox()
         self.power_layout.addWidget(
-            self.gpu_temperature_limit_spinbox_label, 10, 0)
+            self.gpu_temperature_limit_spinbox_label, 11, 0)
         self.power_layout.addWidget(
-            self.gpu_temperature_limit_spinbox, 10, 1)
+            self.gpu_temperature_limit_spinbox, 11, 1)
+
+        self.gpu_total_processor_power_target_on_ac_spinbox_label = QLabel(
+            "Total Processor Power Target on AC [W]")
+        self.gpu_total_processor_power_target_on_ac_spinbox = QSpinBox()
+        self.power_layout.addWidget(
+            self.gpu_total_processor_power_target_on_ac_spinbox_label, 12, 0)
+        self.power_layout.addWidget(
+            self.gpu_total_processor_power_target_on_ac_spinbox, 12, 1)
+
+        self.gpu_to_cpu_dynamic_boost_spinbox_label = QLabel(
+            "GPU to CPU Dynamic Boost [W]")
+        self.gpu_to_cpu_dynamic_boost_spinbox = QSpinBox()
+        self.power_layout.addWidget(
+            self.gpu_to_cpu_dynamic_boost_spinbox_label, 13, 0)
+        self.power_layout.addWidget(
+            self.gpu_to_cpu_dynamic_boost_spinbox, 13, 1)
 
         self.power_load_button = QPushButton("Read from HW")
         self.power_write_button = QPushButton("Apply to HW")
@@ -1317,8 +1371,8 @@ class OtherOptionsTab(QWidget):
             self.controller.update_power_gui)
         self.power_write_button.clicked.connect(
             self.controller.power_gui_write_to_hw)
-        self.power_layout.addWidget(self.power_load_button, 11, 0)
-        self.power_layout.addWidget(self.power_write_button, 11, 1)
+        self.power_layout.addWidget(self.power_load_button, 14, 0)
+        self.power_layout.addWidget(self.power_write_button, 14, 1)
 
         self.power_note_label = QLabel(
             "It is recommended to customize the power settings only in custom mode. Although "
