@@ -32,7 +32,7 @@
  *        the firmware for this mode, so the fan curve might
  *        have to be reconfigured if needed.
  *
- *  It implements the usual hwmon interface to monitor fan speed and temmperature
+ *  It implements the usual hwmon interface to monitor fan speed and temperature
  *  and allows to set the fan curve inside the firmware.
  *
  *    - /sys/class/hwmon/X/fan1_input or /sys/class/hwmon/X/fan2_input  (ro)
@@ -46,15 +46,15 @@
  *    - /sys/class/hwmon/X/pwmY_auto_pointZ_temp (rw)
  *          upper temperature of tempZ (CPU, GPU, or IC) at the Y-level in the fan curve
  *    - /sys/class/hwmon/X/pwmY_auto_pointZ_temp_hyst (rw)
- *          hysteris (CPU, GPU, or IC) at the Y-level in the fan curve. The lower
- *          temperatue of the level is the upper temperature minus the hysteris
+ *          hysteresis (CPU, GPU, or IC) at the Y-level in the fan curve. The lower
+ *          temperature of the level is the upper temperature minus the hysteresis
  *
  *
  *  Credits for reverse engineering the firmware to:
  *      - David Woodhouse: heavily inspired by lenovo_laptop.c
  *      - Luke Cama: Windows version "LegionFanControl"
  *      - SmokelessCPU: reverse engineering of custom registers in EC
- *                      and commincation method with EC via ports
+ *                      and communication method with EC via ports
  *      - 0x1F9F1: additional reverse engineering for complete fan curve
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -75,6 +75,8 @@
 #include <linux/types.h>
 #include <linux/wmi.h>
 #include <linux/version.h>
+
+// https://stackoverflow.com/questions/53209845/linux-kernel-make-with-headers-from-different-driver-tree
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("johnfan");
@@ -1183,12 +1185,20 @@ static const struct model_config model_q6cn = {
 	.access_method_fancurve = ACCESS_METHOD_WMI3,
 	.access_method_fanfullspeed = ACCESS_METHOD_WMI,
 	.acpi_check_dev = true,
-	.ramio_physical_start = 0xFE500600,
-	.ramio_size = 0x600,
+	.ramio_physical_start = 0xFE500400,
+	.ramio_size = 0x600
 	.access_method_cpu_powerlimit = ACCESS_METHOD_WMI,
 	.access_method_gpu_powerlimit = ACCESS_METHOD_WMI,
 	.access_method_gpu_oc = ACCESS_METHOD_WMI,
 };
+
+/**
+What's this:
+ \_SB_.PC00.LPCB.EC0_.ECB2
+OperationRegion (ECB2, SystemMemory, 0xFE500600, 0x0100)
+
+
+ */
 
 static const struct dmi_system_id denylist[] = { {} };
 
@@ -1603,6 +1613,7 @@ static const struct dmi_system_id optimistic_allowlist[] = {
 /* ================================= */
 
 // function from ideapad-laptop.c
+// https://github.com/torvalds/linux/blob/dca922e019dd758b4c1b4bec8f1d509efddeaab4/drivers/platform/x86/lenovo/ideapad-laptop.c
 static int eval_int(acpi_handle handle, const char *name, unsigned long *res)
 {
 	unsigned long long result;
@@ -2695,6 +2706,7 @@ static DEFINE_MUTEX(legion_shared_mutex);
 
 static int legion_shared_init(struct legion_private *priv)
 {
+	pr_info("legion_shared_init: start\n");
 	int ret;
 
 	mutex_lock(&legion_shared_mutex);
@@ -2710,7 +2722,7 @@ static int legion_shared_init(struct legion_private *priv)
 
 	priv->loaded = true;
 	mutex_unlock(&legion_shared_mutex);
-
+	pr_info("legion_shared_init: end\n");
 	return ret;
 }
 
@@ -4153,6 +4165,9 @@ static int debugfs_fancurve_show(struct seq_file *s, void *unused)
 	seq_printf(s, "legion_laptop ec_readonly: %d\n", ec_readonly);
 
 	err = eval_int(priv->adev->handle, "VPC0._CFG", &cfg);
+	if (err) { 
+		err = eval_int(priv->adev->handle, "_VPC", &cfg);
+	}
 	seq_printf(s, "ACPI CFG error: %d\n", err);
 	seq_printf(s, "ACPI CFG: %lu\n", cfg);
 
@@ -5383,6 +5398,7 @@ static const struct attribute_group legion_attribute_group = {
 
 static int legion_sysfs_init(struct legion_private *priv)
 {
+	pr_info("legion_sysfs_init: starting\n");
 	return device_add_group(&priv->platform_device->dev,
 				&legion_attribute_group);
 }
@@ -5399,7 +5415,7 @@ static void legion_sysfs_exit(struct legion_private *priv)
 /* WMI + ACPI                     */
 /* ============================   */
 // heavily based on ideapad_laptop.c
-
+// TODO(@WFlores): Try to see if we can incorporate the header files from the drivers
 // TODO: proper names if meaning of all events is clear
 enum LEGION_WMI_EVENT {
 	LEGION_WMI_EVENT_GAMEZONE = 1,
@@ -5902,7 +5918,7 @@ static ssize_t fan_max_show(struct device *dev,
 static ssize_t autopoint_show(struct device *dev,
 			      struct device_attribute *devattr, char *buf)
 {
-	struct fancurve fancurve;
+	struct fancurve fancurve = { 0 };
 	int err;
 	int value;
 	struct legion_private *priv = dev_get_drvdata(dev);
@@ -6607,6 +6623,7 @@ static void legion_hwmon_exit(struct legion_private *priv)
 
 static int acpi_init(struct legion_private *priv, struct acpi_device *adev)
 {
+	pr_info("acpi_init: start\n");
 	int err;
 	unsigned long cfg;
 	bool skip_acpi_sta_check;
@@ -6625,12 +6642,19 @@ static int acpi_init(struct legion_private *priv, struct acpi_device *adev)
 			dev_info(dev, "Could not evaluate ACPI _STA\n");
 			goto err_acpi_init;
 		}
+		dev_info(dev, "ACPI _STA result: %lu\n", cfg);
 
 		err = eval_int(priv->adev->handle, "VPC0._CFG", &cfg);
 		if (err) {
-			err = eval_int(priv->adev->handle, "_CFG", &cfg);
+			dev_info(
+				dev,
+				"Could not evaluate ACPI _CFG - trying another key\n");
+			// \_SB_.PC00.LPCB.EC0_.VPC0._VPC  - this is what's intended, I think...
+			err = eval_int(priv->adev->handle, "_VPC", &cfg);
 			if (err) {
-				dev_info(dev, "Could not evaluate ACPI _CFG\n");
+				dev_info(
+					dev,
+					"Could not evaluate Alternate ACPI _CFG Key\n");
 				goto err_acpi_init;
 			}
 		}
@@ -6638,10 +6662,11 @@ static int acpi_init(struct legion_private *priv, struct acpi_device *adev)
 	} else {
 		dev_info(dev, "Skipping ACPI _STA check");
 	}
-
+	pr_info("acpi_init: end");
 	return 0;
 
 err_acpi_init:
+	pr_info("acpi_init: error! %d\n", err);
 	return err;
 }
 
@@ -6835,7 +6860,7 @@ static int legion_add(struct platform_device *pdev)
 
 	dev_info(
 		&pdev->dev,
-		"Read identifying information: DMI_SYS_VENDOR: %s; DMI_PRODUCT_NAME: %s; DMI_BIOS_VERSION:%s\n",
+		"Read identifying information: DMI_SYS_VENDOR: %s; DMI_PRODUCT_NAME: %s; DMI_BIOS_VERSION: %s\n",
 		dmi_get_system_info(DMI_SYS_VENDOR),
 		dmi_get_system_info(DMI_PRODUCT_NAME),
 		dmi_get_system_info(DMI_BIOS_VERSION));
@@ -6856,13 +6881,8 @@ static int legion_add(struct platform_device *pdev)
 		dev_info(&pdev->dev, "legion_laptop is forced to load.\n");
 		goto err_legion_shared_init;
 	}
+	pr_info("Running dev_set_drvdata\n");
 	dev_set_drvdata(&pdev->dev, priv);
-
-	// TODO: remove
-	pr_info("Read identifying information: DMI_SYS_VENDOR: %s; DMI_PRODUCT_NAME: %s; DMI_BIOS_VERSION:%s\n",
-		dmi_get_system_info(DMI_SYS_VENDOR),
-		dmi_get_system_info(DMI_PRODUCT_NAME),
-		dmi_get_system_info(DMI_BIOS_VERSION));
 
 	dmi_sys = dmi_first_match(optimistic_allowlist);
 	is_allowed = dmi_sys != NULL;
