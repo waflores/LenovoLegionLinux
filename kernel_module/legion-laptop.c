@@ -2846,7 +2846,7 @@ static ssize_t ec_read_temperature(struct ecram *ecram,
 	} else if (sensor_id == 2) {
 		res = ecram_read(ecram, model->registers->EXT_IC_TEMP_INPUT);
 	} else {
-		// TODO: use all correct error codes
+				// TODO: use all correct error codes
 		return -EEXIST;
 	}
 	if (!err)
