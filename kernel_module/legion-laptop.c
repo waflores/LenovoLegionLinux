@@ -2349,7 +2349,7 @@ enum SENSOR_ATTR {
 /* Data model for fan curve      */
 /* ============================= */
 
-#define MAX_RPM 10000
+#define MAX_RPM 5000
 
 enum fan_speed_unit {
 	FAN_SPEED_UNIT_PERCENT = 1,
