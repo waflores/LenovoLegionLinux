@@ -201,9 +201,9 @@ enum access_method {
 // acpi paths used by this driver
 enum acpi_paths_inventory_ids {
 	ACPI_PATH_STA = 0, // _STA
-	ACPI_PATH_CFG,     // _CFG
+	ACPI_PATH_CFG, // _CFG
 	ACPI_PATH_READ_RAPIDCHARGE, // GBMD
-	ACPI_PATH_WRITE_RAPIDCHARGE,// SBMC
+	ACPI_PATH_WRITE_RAPIDCHARGE, // SBMC
 	ACPI_PATH_READ_POWERMODE, // BTSM
 	ACPI_PATH_READ_FANSPEED1, // FANS
 	ACPI_PATH_READ_FANSPEED2, // FA2S
@@ -993,10 +993,8 @@ static const struct model_config model_lzcn = {
 	.acpi_check_dev = false,
 	.ramio_physical_start = 0xFE0B0400,
 	.ramio_size = 0x600,
-	.acpi_paths = {
-		[ACPI_PATH_STA] = "\\_SB.PC00.LPCB.EC0.VPC0._STA",
-		[ACPI_PATH_CFG] = "\\_SB.PC00.LPCB.EC0.VPC0._CFG"
-	}
+	.acpi_paths = { [ACPI_PATH_STA] = "\\_SB.PC00.LPCB.EC0.VPC0._STA",
+			[ACPI_PATH_CFG] = "\\_SB.PC00.LPCB.EC0.VPC0._CFG" }
 };
 
 // LOQ Model 2024
@@ -1076,6 +1074,11 @@ static const struct model_config model_q6cn = {
 	.acpi_check_dev = true,
 	.ramio_physical_start = 0xFE500400,
 	.ramio_size = 0x600,
+	.acpi_paths = { 
+		[ACPI_PATH_STA] = "\\_SB.PC00.LPCB.EC0.VPC0._STA",
+		[ACPI_PATH_CFG] = "\\_SB_.PC00.LPCB.EC0.VPC0._CFG"
+	}
+
 };
 
 static const struct dmi_system_id denylist[] = { {} };
@@ -1494,7 +1497,8 @@ static const struct dmi_system_id optimistic_allowlist[] = {
 //move all structs/defn from all the way down up
 static const struct model_config *_model;
 
-static const char *get_model_acpi_path(const struct model_config *model, enum acpi_paths_inventory_ids id)
+static const char *get_model_acpi_path(const struct model_config *model,
+				       enum acpi_paths_inventory_ids id)
 {
 	if (id < 0 || id >= ACPI_PATH_MAX)
 		return NULL;
@@ -1504,13 +1508,14 @@ static const char *get_model_acpi_path(const struct model_config *model, enum ac
 }
 
 // function from ideapad-laptop.c
-static int eval_int(struct acpi_device *adev, const char *name, unsigned long *res)
+static int eval_int(struct acpi_device *adev, const char *name,
+		    unsigned long *res)
 {
 	unsigned long long result;
 	acpi_status status;
 	acpi_handle handle;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
-	status = acpi_get_handle(NULL, (char *) name, &handle);
+	status = acpi_get_handle(NULL, (char *)name, &handle);
 	if (ACPI_FAILURE(status))
 		return -EIO;
 #else
@@ -1540,8 +1545,7 @@ static int exec_simple_method(struct acpi_device *adev, const char *name,
 #else
 	handle = adev->handle;
 #endif
-	status =
-		acpi_execute_simple_method(handle, (char *)name, arg);
+	status = acpi_execute_simple_method(handle, (char *)name, arg);
 
 	return ACPI_FAILURE(status) ? -EIO : 0;
 }
@@ -2793,9 +2797,11 @@ static ssize_t acpi_read_fanspeed(struct legion_private *priv, int fan_id,
 	const char *acpi_path;
 
 	if (fan_id == 0) {
-		acpi_path = get_model_acpi_path(_model, ACPI_PATH_READ_FANSPEED1);
+		acpi_path =
+			get_model_acpi_path(_model, ACPI_PATH_READ_FANSPEED1);
 	} else if (fan_id == 1) {
-		acpi_path = get_model_acpi_path(_model, ACPI_PATH_READ_FANSPEED2);
+		acpi_path =
+			get_model_acpi_path(_model, ACPI_PATH_READ_FANSPEED2);
 	} else {
 		// TODO: use all correct error codes
 		return -EEXIST;
@@ -2819,9 +2825,11 @@ static ssize_t acpi_read_temperature(struct legion_private *priv, int fan_id,
 	const char *acpi_path;
 
 	if (fan_id == 0) {
-		acpi_path = get_model_acpi_path(_model, ACPI_PATH_READ_CPU_TEMP);
+		acpi_path =
+			get_model_acpi_path(_model, ACPI_PATH_READ_CPU_TEMP);
 	} else if (fan_id == 1) {
-		acpi_path = get_model_acpi_path(_model, ACPI_PATH_READ_GPU_TEMP);
+		acpi_path =
+			get_model_acpi_path(_model, ACPI_PATH_READ_GPU_TEMP);
 	} else {
 		// TODO: use all correct error codes
 		return -EEXIST;
@@ -3698,10 +3706,10 @@ static ssize_t ec_read_powermode(struct legion_private *priv, int *powermode)
 static ssize_t ec_write_powermode(struct legion_private *priv, u8 value)
 {
 	if (value != LEGION_EC_POWERMODE_BALANCED &&
-			value != LEGION_EC_POWERMODE_PERFORMANCE &&
-			value != LEGION_EC_POWERMODE_QUIET &&
-			value != LEGION_EC_POWERMODE_CUSTOM &&
-			value != LEGION_EC_POWERMODE_EXTREME) {
+	    value != LEGION_EC_POWERMODE_PERFORMANCE &&
+	    value != LEGION_EC_POWERMODE_QUIET &&
+	    value != LEGION_EC_POWERMODE_CUSTOM &&
+	    value != LEGION_EC_POWERMODE_EXTREME) {
 		pr_info("Unexpected power mode value ignored: %d\n", value);
 		return -ENOMEM;
 	}
@@ -3737,10 +3745,10 @@ static ssize_t wmi_read_powermode(int *powermode)
 static ssize_t wmi_write_powermode(u8 value)
 {
 	if (value != LEGION_WMI_POWERMODE_BALANCED &&
-		value != LEGION_WMI_POWERMODE_PERFORMANCE &&
-		value != LEGION_WMI_POWERMODE_LOW_POWER &&
-		value != LEGION_WMI_POWERMODE_CUSTOM &&
-		value != LEGION_WMI_POWERMODE_MAX_POWER) {
+	    value != LEGION_WMI_POWERMODE_PERFORMANCE &&
+	    value != LEGION_WMI_POWERMODE_LOW_POWER &&
+	    value != LEGION_WMI_POWERMODE_CUSTOM &&
+	    value != LEGION_WMI_POWERMODE_MAX_POWER) {
 		pr_info("Unexpected power mode value ignored: %d\n", value);
 		return -ENOMEM;
 	}
@@ -5196,10 +5204,12 @@ static int legion_platform_profile_probe(void *drvdata, unsigned long *choices)
 	set_bit(PLATFORM_PROFILE_LOW_POWER, choices);
 	set_bit(PLATFORM_PROFILE_BALANCED, choices);
 	set_bit(PLATFORM_PROFILE_PERFORMANCE, choices);
-	if (conf_has_custom_powermode && conf_access_method_powermode == ACCESS_METHOD_WMI)
+	if (conf_has_custom_powermode &&
+	    conf_access_method_powermode == ACCESS_METHOD_WMI)
 		set_bit(PLATFORM_PROFILE_CUSTOM, choices);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
-	if (conf_has_extreme_powermode && conf_access_method_powermode == ACCESS_METHOD_WMI)
+	if (conf_has_extreme_powermode &&
+	    conf_access_method_powermode == ACCESS_METHOD_WMI)
 		set_bit(PLATFORM_PROFILE_MAX_POWER, choices);
 #endif
 	return 0;
@@ -5234,7 +5244,8 @@ static int legion_platform_profile_init(struct legion_private *priv)
 	priv->platform_profile_handler.profile_set =
 		legion_platform_profile_set;
 
-	set_bit(PLATFORM_PROFILE_LOW_POWER, priv->platform_profile_handler.choices);
+	set_bit(PLATFORM_PROFILE_LOW_POWER,
+		priv->platform_profile_handler.choices);
 	set_bit(PLATFORM_PROFILE_BALANCED,
 		priv->platform_profile_handler.choices);
 	set_bit(PLATFORM_PROFILE_PERFORMANCE,
@@ -6568,9 +6579,9 @@ static SIMPLE_DEV_PM_OPS(legion_pm, NULL, legion_pm_resume);
 
 // same as ideapad
 static const struct acpi_device_id legion_device_ids[] = {
-	// todo: change to "VPC2004", and also ACPI paths
+// todo: change to "VPC2004", and also ACPI paths
 #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
-	    { "PNP0C09", 0 },
+	{ "PNP0C09", 0 },
 #endif
 	{ "", 0 },
 };
