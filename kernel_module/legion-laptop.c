@@ -1215,9 +1215,10 @@ static const struct model_config model_q6cn = {
 	.acpi_check_dev = true,
 	.ramio_physical_start = 0xFE500400,
 	.ramio_size = 0x600,
-	.access_method_cpu_powerlimit = ACCESS_METHOD_WMI,
-	.access_method_gpu_powerlimit = ACCESS_METHOD_WMI,
-	.access_method_gpu_oc = ACCESS_METHOD_WMI,
+	.acpi_paths = {
+		[ACPI_PATH_STA] = "\\_SB.PC00.LPCB.EC0.VPC0._STA",
+		[ACPI_PATH_CFG] = "\\_SB_.PC00.LPCB.EC0.VPC0._VPC"
+	}
 };
 
 /**
@@ -6694,7 +6695,7 @@ static int acpi_init(struct legion_private *priv, struct acpi_device *adev)
 
 	acpi_path = get_model_acpi_path(_model, ACPI_PATH_WRITE_RAPIDCHARGE);
 	priv->adev = adev;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(7, 0, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
 	if (!priv->adev) {
 		dev_info(dev, "Could not get ACPI handle\n");
 		goto err_acpi_init;
@@ -7190,9 +7191,7 @@ static SIMPLE_DEV_PM_OPS(legion_pm, NULL, legion_pm_resume);
 // same as ideapad
 static const struct acpi_device_id legion_device_ids[] = {
 // todo: change to "VPC2004", and also ACPI paths
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
-	{ "VPC2004", 0 },
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
 	{ "PNP0C09", 0 },
 #endif
 	{ "", 0 },
