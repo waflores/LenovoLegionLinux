@@ -1063,20 +1063,27 @@ static const struct model_config model_q6cn = {
 	.embedded_controller_id = 0x5508,
 	.memoryio_physical_ec_start = 0xC400,
 	.memoryio_size = 0x300,
-	.has_minifancurve = true,
+	.has_minifancurve = true,  // confirmed to be in error
 	.has_custom_powermode = true,
-	.access_method_powermode = ACCESS_METHOD_EC3,
-	.access_method_keyboard = ACCESS_METHOD_EC3,
-	.access_method_fanspeed = ACCESS_METHOD_EC3,
-	.access_method_temperature = ACCESS_METHOD_WMI,
-	.access_method_fancurve = ACCESS_METHOD_EC3,
-	.access_method_fanfullspeed = ACCESS_METHOD_EC3,
+	.access_method_powermode = ACCESS_METHOD_WMI, // (only: EC, ACPI, WMI) 
+	.access_method_keyboard = ACCESS_METHOD_WMI,
+	.access_method_fanspeed = ACCESS_METHOD_WMI3, // (only: EC, ACPI, WMI, WMI2, WMI3)
+	.access_method_temperature = ACCESS_METHOD_WMI3,  // WMI3 is confirmed!
+	.access_method_fancurve = ACCESS_METHOD_WMI3,
+	.access_method_fanfullspeed = ACCESS_METHOD_WMI,  // EC or WMI is good
 	.acpi_check_dev = true,
-	.ramio_physical_start = 0xFE500400,
+	.ramio_physical_start = 0xFE500400,  // also proposed: c0xFE00D400
 	.ramio_size = 0x600,
 	.acpi_paths = {
-		[ACPI_PATH_STA] = "\\_SB.PC00.LPCB.EC0.VPC0._STA",
-		[ACPI_PATH_CFG] = "\\_SB_.PC00.LPCB.EC0.VPC0._CFG"
+		[ACPI_PATH_STA] =               "\\_SB.PC00.LPCB.EC0.VPC0._STA",  // Confirmed that this is needed
+		[ACPI_PATH_CFG] =               "\\_SB_.PC00.LPCB.EC0.VPC0._CFG",  // Confirmed that this is needed
+		// [ACPI_PATH_READ_RAPIDCHARGE] =  "\\_SB_.PC00.LPCB.EC0.GBMD",
+		// [ACPI_PATH_WRITE_RAPIDCHARGE] = "\\_SB_.PC00.LPCB.EC0.VPC0.SBMC",
+		// [ACPI_PATH_READ_POWERMODE] = "VPC0.BTSM",
+		// [ACPI_PATH_READ_FANSPEED1] =    "\\_SB_.PC00.LPCB.EC0.FANS",
+		[ACPI_PATH_READ_FANSPEED2] =    "\\_SB_.PC00.LPCB.EC0.FA2S",  // Confirmed that this is needed
+		// [ACPI_PATH_READ_CPU_TEMP] =     "\\_SB_.PC00.LPCB.EC0.CPUT",
+		[ACPI_PATH_READ_GPU_TEMP] =     "\\_SB_.PC00.LPCB.EC0.GPUT",   // Confirmed that this is needed
 	}
 
 };
