@@ -1149,10 +1149,10 @@ static const struct model_config model_q6cn = {
 		// [ACPI_PATH_READ_RAPIDCHARGE] =  "\\_SB_.PC00.LPCB.EC0.GBMD",
 		// [ACPI_PATH_WRITE_RAPIDCHARGE] = "\\_SB_.PC00.LPCB.EC0.VPC0.SBMC",
 		// [ACPI_PATH_READ_POWERMODE] = "VPC0.BTSM",
-		// [ACPI_PATH_READ_FANSPEED1] =    "\\_SB_.PC00.LPCB.EC0.FANS",
-		[ACPI_PATH_READ_FANSPEED2] =    "\\_SB_.PC00.LPCB.EC0.FA2S",  // Confirmed that this is needed
+		// [ACPI_PATH_READ_FANSPEED1] =    "\\_SB_.PC00.LPCB.EC0.FANS",  // Confirmed that this is needed
+		// [ACPI_PATH_READ_FANSPEED2] =    "\\_SB_.PC00.LPCB.EC0.FA2S",  // Confirmed that this is needed
 		// [ACPI_PATH_READ_CPU_TEMP] =     "\\_SB_.PC00.LPCB.EC0.CPUT",
-		[ACPI_PATH_READ_GPU_TEMP] =     "\\_SB_.PC00.LPCB.EC0.GPUT",   // Confirmed that this is needed
+		// [ACPI_PATH_READ_GPU_TEMP] =     "\\_SB_.PC00.LPCB.EC0.GPUT",   // Confirmed that this is needed - why does this drop off?
 	}
 
 };
@@ -6208,7 +6208,6 @@ static int acpi_init(struct legion_private *priv, struct acpi_device *adev)
 
 	acpi_path = get_model_acpi_path(_model, ACPI_PATH_WRITE_RAPIDCHARGE);
 	priv->adev = adev;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(7, 0, 0)
 	if (!priv->adev) {
 		dev_info(dev, "No ACPI handle, will use FQN paths\n");
 	}
