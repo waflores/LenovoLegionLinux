@@ -1,3 +1,63 @@
 [build-system]
-requires = ['setuptools>=42']
-build-backend = 'setuptools.build_meta'
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "legion_linux"
+version = "0.0.20"
+description = "Control Lenovo Legion laptop"
+readme = "README.md"
+license = { text = "GPL-2.0" }
+requires-python = ">=3.8"
+authors = [{ name = "johnfan", email = "johnfan@example.org" }]
+keywords = ["lenovo", "legion", "laptop", "fan-control", "hardware"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Hardware",
+    "Topic :: System :: Monitoring",
+]
+dependencies = [
+    "PyQt6>=6.7.0",
+    "PyYAML>=6.0",
+    "argcomplete>=3.0",
+    "darkdetect>=0.5",
+    "Pillow>=9.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/johnfanv2/LenovoLegionLinux"
+Repository = "https://github.com/johnfanv2/LenovoLegionLinux"
+
+[project.scripts]
+legion_cli = "legion_linux.legion_cli:main"
+legion_gui = "legion_linux.legion_gui:main"
+
+[tool.setuptools.packages.find]
+exclude = ["tests"]
+
+[tool.setuptools.package-data]
+"*" = ["legion_logo.png", "legion_logo_light.png", "legion_logo_dark.png"]
+
+[tool.setuptools.data-files]
+"" = [
+    "share/pixmaps/legion_linux/legion_logo.png",
+    "share/pixmaps/legion_linux/legion_logo_light.png",
+    "share/pixmaps/legion_linux/legion_logo_dark.png",
+    "share/applications/legion_linux/legion_gui.desktop",
+    "share/polkit-1/actions/legion_linux/legion_cli.policy",
+    "share/polkit-1/actions/legion_linux/legion_gui.policy",
+    "share/legion_linux/legion_linux/extra/service/legiond.ini",
+    "share/legion_linux/legion_linux/extra/service/profiles/*",
+]
